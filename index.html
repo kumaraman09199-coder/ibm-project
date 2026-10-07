@@ -1,0 +1,1739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Automated SAST Remediation Agent</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --surface2:  #21262d;
+    --border:    #30363d;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --accent:    #58a6ff;
+    --accent2:   #7c5cd8;
+    --green:     #3fb950;
+    --yellow:    #d29922;
+    --orange:    #f78166;
+    --red:       #da3633;
+    --radius:    8px;
+    --trans:     0.2s ease;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Layout ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    display: inline-block;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .main-layout {
+    display: flex;
+    min-height: calc(100vh - 56px);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 16px 0;
+    position: sticky;
+    top: 56px;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+  }
+
+  .nav-section {
+    padding: 6px 16px 2px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 0;
+    color: var(--muted);
+    font-size: 13px;
+    transition: background var(--trans), color var(--trans);
+    border-left: 3px solid transparent;
+    user-select: none;
+  }
+
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active {
+    background: var(--surface2);
+    color: var(--accent);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+
+  .nav-badge {
+    margin-left: auto;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 10px;
+    padding: 1px 7px;
+    color: var(--muted);
+  }
+
+  .nav-item.active .nav-badge { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* ── Content ── */
+  .content {
+    flex: 1;
+    padding: 28px;
+    max-width: 1100px;
+    overflow-x: hidden;
+  }
+
+  .page { display: none; animation: fadeIn 0.2s ease; }
+  .page.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Typography ── */
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  h2 { font-size: 17px; font-weight: 600; margin-bottom: 14px; }
+  h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+
+  .page-header { margin-bottom: 24px; }
+  .page-subtitle { color: var(--muted); font-size: 13px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .card-sm { padding: 14px 18px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--trans);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #0d1117;
+    font-weight: 600;
+  }
+
+  .btn-primary:hover { background: #79c0ff; border-color: #79c0ff; color: #0d1117; }
+
+  .btn-green { background: var(--green); border-color: var(--green); color: #0d1117; font-weight: 600; }
+  .btn-green:hover { background: #56d364; border-color: #56d364; color: #0d1117; }
+
+  .btn-red { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
+  .btn-red:hover { background: #f85149; border-color: #f85149; }
+
+  .btn-orange { background: var(--orange); border-color: var(--orange); color: #0d1117; font-weight: 600; }
+  .btn-orange:hover { background: #ffa198; }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .badge-critical { background: rgba(218,54,51,0.18); color: #f85149; border: 1px solid rgba(218,54,51,0.35); }
+  .badge-high     { background: rgba(247,129,102,0.18); color: #ffa198; border: 1px solid rgba(247,129,102,0.35); }
+  .badge-medium   { background: rgba(210,153,34,0.18); color: #e3b341; border: 1px solid rgba(210,153,34,0.35); }
+  .badge-low      { background: rgba(63,185,80,0.18); color: #56d364; border: 1px solid rgba(63,185,80,0.35); }
+  .badge-info     { background: rgba(88,166,255,0.18); color: #79c0ff; border: 1px solid rgba(88,166,255,0.35); }
+
+  .badge-new      { background: rgba(88,166,255,0.12); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+  .badge-proposed { background: rgba(124,92,216,0.18); color: #bc8cff; border: 1px solid rgba(124,92,216,0.35); }
+  .badge-passed   { background: rgba(63,185,80,0.18); color: #56d364; border: 1px solid rgba(63,185,80,0.35); }
+  .badge-failed   { background: rgba(218,54,51,0.18); color: #f85149; border: 1px solid rgba(218,54,51,0.35); }
+  .badge-review   { background: rgba(210,153,34,0.18); color: #e3b341; border: 1px solid rgba(210,153,34,0.35); }
+  .badge-created  { background: rgba(63,185,80,0.18); color: #56d364; border: 1px solid rgba(63,185,80,0.35); }
+  .badge-rejected { background: rgba(218,54,51,0.18); color: #f85149; border: 1px solid rgba(218,54,51,0.35); }
+
+  /* ── Summary cards ── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+    transition: border-color var(--trans);
+  }
+
+  .summary-card:hover { border-color: var(--accent); }
+  .summary-num { font-size: 28px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+  .summary-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: var(--surface2); }
+  th { padding: 10px 14px; text-align: left; font-weight: 600; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background var(--trans); cursor: pointer; }
+  tbody tr:hover { background: var(--surface2); }
+
+  .clickable-row { cursor: pointer; }
+
+  /* ── Filters ── */
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+
+  select, input[type="text"] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 6px 10px;
+    outline: none;
+    transition: border-color var(--trans);
+  }
+
+  select:focus, input[type="text"]:focus { border-color: var(--accent); }
+  select option { background: var(--surface2); }
+
+  /* ── Code ── */
+  pre, code {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+  }
+
+  .diff-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  @media (max-width: 700px) { .diff-grid { grid-template-columns: 1fr; } }
+
+  .diff-label {
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .diff-label.before { color: #f85149; }
+  .diff-label.after  { color: #56d364; }
+
+  .diff-line { display: block; }
+  .diff-del { background: rgba(218,54,51,0.18); color: #ffa198; }
+  .diff-add { background: rgba(63,185,80,0.18); color: #56d364; }
+
+  /* ── Upload ── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px;
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--trans);
+  }
+
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(88,166,255,0.04);
+  }
+
+  .drop-icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .drop-sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+  #fileInput { display: none; }
+
+  /* ── Logs ── */
+  .log-box {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  .log-pass { color: #56d364; }
+  .log-fail { color: #f85149; }
+  .log-info { color: #79c0ff; }
+  .log-warn { color: #e3b341; }
+  .log-muted { color: var(--muted); }
+
+  /* ── PR Preview ── */
+  .pr-field { margin-bottom: 14px; }
+  .pr-field label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .pr-value {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    word-break: break-all;
+  }
+
+  .pr-description {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    font-size: 13px;
+    white-space: pre-wrap;
+    max-height: 220px;
+    overflow-y: auto;
+    line-height: 1.7;
+  }
+
+  /* ── Workflow ── */
+  .workflow-steps {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    flex-wrap: wrap;
+    margin: 20px 0;
+  }
+
+  .workflow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 100px;
+  }
+
+  .step-dot {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    position: relative;
+    z-index: 1;
+    transition: all var(--trans);
+  }
+
+  .step-dot.active  { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,0.1); }
+  .step-dot.done    { border-color: var(--green); background: var(--green); color: #0d1117; }
+  .step-dot.failed  { border-color: var(--red); background: var(--red); color: #fff; }
+
+  .step-label { font-size: 10px; color: var(--muted); margin-top: 6px; text-align: center; max-width: 90px; line-height: 1.3; }
+  .step-label.active { color: var(--accent); font-weight: 600; }
+  .step-label.done   { color: var(--green); }
+  .step-label.failed { color: var(--red); }
+
+  .step-connector {
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    margin-top: 15px;
+    min-width: 20px;
+    transition: background var(--trans);
+  }
+
+  .step-connector.done { background: var(--green); }
+  .step-connector.active { background: var(--accent); }
+
+  /* ── Audit ── */
+  .audit-item {
+    display: flex;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+  }
+
+  .audit-item:last-child { border-bottom: none; }
+
+  .audit-time {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    min-width: 120px;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+
+  .audit-icon {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .audit-text { font-size: 13px; line-height: 1.5; }
+  .audit-sub  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Confidence bar ── */
+  .confidence-bar {
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+
+  .confidence-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+
+  /* ── Alerts / notices ── */
+  .notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+
+  .notice-info    { background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.3); }
+  .notice-success { background: rgba(63,185,80,0.1);  border: 1px solid rgba(63,185,80,0.3); }
+  .notice-warn    { background: rgba(210,153,34,0.1);  border: 1px solid rgba(210,153,34,0.3); }
+  .notice-danger  { background: rgba(218,54,51,0.1);   border: 1px solid rgba(218,54,51,0.3); }
+
+  /* ── Detail top bar ── */
+  .detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  .meta-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+
+  .meta-item span { color: var(--muted); margin-right: 4px; }
+
+  /* ── Button row ── */
+  .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+
+  /* ── Textarea ── */
+  textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 10px 14px;
+    resize: vertical;
+    outline: none;
+    transition: border-color var(--trans);
+    line-height: 1.6;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .content { padding: 16px; }
+    .summary-grid { grid-template-columns: repeat(3, 1fr); }
+    .mobile-nav { display: flex; }
+  }
+
+  .mobile-nav {
+    display: none;
+    overflow-x: auto;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 4px 16px;
+    gap: 4px;
+    scrollbar-width: none;
+  }
+
+  .mobile-nav::-webkit-scrollbar { display: none; }
+
+  .mobile-nav-item {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--muted);
+    white-space: nowrap;
+    transition: all var(--trans);
+  }
+
+  .mobile-nav-item.active { background: var(--surface2); color: var(--accent); font-weight: 600; }
+
+  /* ── Section divider ── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+  /* ── Spinner ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  /* ── Patch textarea ── */
+  .patch-wrap { position: relative; }
+  .patch-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══ Header ═══ -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🛡</div>
+    SAST Remediation Agent
+  </div>
+  <div class="header-right">
+    <span class="status-dot"></span>
+    Agent Active
+    <span id="hdr-count" style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:11px;">0 findings</span>
+  </div>
+</header>
+
+<!-- ═══ Mobile Nav ═══ -->
+<div class="mobile-nav" id="mobileNav"></div>
+
+<!-- ═══ Main Layout ═══ -->
+<div class="main-layout">
+
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section">Workflow</div>
+    <div class="nav-item active" data-page="upload">
+      📂 <span>Upload</span>
+    </div>
+    <div class="nav-item" data-page="dashboard">
+      📊 <span>Dashboard</span>
+      <span class="nav-badge" id="nb-dashboard">0</span>
+    </div>
+    <div class="nav-section">Analysis</div>
+    <div class="nav-item" data-page="detail">
+      🔍 <span>Finding Detail</span>
+    </div>
+    <div class="nav-item" data-page="fix">
+      🔧 <span>Fix Generator</span>
+    </div>
+    <div class="nav-item" data-page="tests">
+      🧪 <span>Test Runner</span>
+    </div>
+    <div class="nav-section">Review</div>
+    <div class="nav-item" data-page="pr">
+      📝 <span>PR Preview</span>
+    </div>
+    <div class="nav-item" data-page="approval">
+      ✅ <span>Approval Gate</span>
+    </div>
+    <div class="nav-section">History</div>
+    <div class="nav-item" data-page="workflow">
+      🔄 <span>Status Workflow</span>
+    </div>
+    <div class="nav-item" data-page="audit">
+      📋 <span>Audit Log</span>
+      <span class="nav-badge" id="nb-audit">0</span>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- ══════════════════════════════════════
+         PAGE: UPLOAD
+    ══════════════════════════════════════ -->
+    <div class="page active" id="page-upload">
+      <div class="page-header">
+        <h1>Upload Findings</h1>
+        <p class="page-subtitle">Load a Semgrep JSON report or use sample data to explore the workflow.</p>
+      </div>
+
+      <div class="card">
+        <div class="drop-zone" id="dropZone">
+          <div class="drop-icon">📂</div>
+          <div class="drop-title">Drop Semgrep JSON here</div>
+          <div class="drop-sub">or click to browse for a file</div>
+          <input type="file" id="fileInput" accept=".json" />
+          <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Browse File</button>
+        </div>
+
+        <hr />
+
+        <div style="text-align:center">
+          <p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Don't have a file? Load 6 built-in sample findings covering common vulnerability classes.</p>
+          <button class="btn btn-primary" style="font-size:14px;padding:10px 28px;" onclick="loadSampleData()">
+            ⚡ Load Sample Data
+          </button>
+        </div>
+      </div>
+
+      <div class="card" id="uploadStatus" style="display:none">
+        <div class="notice notice-success" id="uploadNotice"></div>
+        <div id="uploadPreview"></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAGE: DASHBOARD
+    ══════════════════════════════════════ -->
+    <div class="page" id="page-dashboard">
+      <div class="page-header">
+        <h1>Dashboard</h1>
+        <p class="page-subtitle">Overview of all static-analysis findings and remediation status.</p>
+      </div>
+
+      <div class="summary-grid" id="summaryGrid"></div>
+
+      <div class="card">
+        <div class="filters">
+          <select id="filterSev">
+            <option value="">All Severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="info">Info</option>
+          </select>
+          <select id="filterStatus">
+            <option value="">All Statuses</option>
+            <option value="new">New</option>
+            <option value="proposed">Fix Proposed</option>
+            <option value="passed">Tests Passed</option>
+            <option value="failed">Tests Failed</option>
+            <option value="review">Awaiting Review</option>
+            <option value="created">PR Created</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <input type="text" id="filterSearch" placeholder="Search rules, files…" style="flex:1;min-width:140px;" />
+          <button class="btn" onclick="resetFilters()">Reset</button>
+        </div>
+
+        <div class="table-wrap">
+          <table id="findingsTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Rule</th>
+                <th>Severity</th>
+                <th>File</th>
+                <th>Line</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="findingsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAGE: FINDING DETAIL
+    ══════════════════════════════════════ -->
+    <div class="page" id="page-detail">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+        <div>
+          <h1 id="detailTitle">Finding Detail</h1>
+          <p class="page-subtitle" id="detailSubtitle">Select a finding from the dashboard.</p>
+        </div>
+        <div class="btn-row">
+          <button class="btn" onclick="navigate('dashboard')">← Back</button>
+          <button class="btn btn-primary" onclick="navigate('fix')">Go to Fix Generator →</button>
+        </div>
+      </div>
+
+      <div id="detailContent">
+        <div class="notice notice-info">ℹ️ &nbsp;No finding selected. Go to the <a href="#" onclick="navigate('dashboard');return false;" style="color:var(--accent);">Dashboard</a> and click a row.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAGE: FIX GENERATOR
+    ══════════════════════════════════════ -->
+    <div class="page" id="page-fix">
+      <div class="page-header">
+        <h1>Fix Generator</h1>
+        <p class="page-subtitle">AI-simulated patch generation with confidence scoring.</p>
+      </div>
+
+      <div id="fixContent">
+        <div class="notice notice-info">ℹ️ &nbsp;No finding selected. Go to <a href="#" onclick="navigate('dashboard');return false;" style="color:var(--accent);">Dashboard</a> first.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAGE: TEST RUNNER
+    ══════════════════════════════════════ -->
+    <div class="page" id="page-tests">
+      <div class="page-header">
+        <h1>Test Runner</h1>
+        <p class="page-subtitle">Run automated tests against the generated patch.</p>
+      </div>
+
+      <div id="testContent">
+        <div class="notice notice-info">ℹ️ &nbsp;Generate a fix first before running tests.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAGE: PR PREVIEW
+    ══════════════════════════════════════ -->
+    <div class="page" id="page-pr">
+      <div class="page-header">
+        <h1>PR Preview</h1>
+        <p class="page-subtitle">Auto-generated pull-request details ready for submission.</p>
+      </div>
+
+      <div id="prContent">
+        <div class="notice notice-info">ℹ️ &nbsp;Complete the fix and test steps to generate a PR preview.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAGE: APPROVAL GATE
+    ══════════════════════════════════════ -->
+    <div class="page" id="page-approval">
+      <div class="page-header">
+        <h1>Approval Gate</h1>
+        <p class="page-subtitle">Human review before the PR is created.</p>
+      </div>
+
+      <div id="approvalContent">
+        <div class="notice notice-info">ℹ️ &nbsp;A fix must be generated and tests must pass before approval is available.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAGE: STATUS WORKFLOW
+    ══════════════════════════════════════ -->
+    <div class="page" id="page-workflow">
+      <div class="page-header">
+        <h1>Status Workflow</h1>
+        <p class="page-subtitle">Visual pipeline for the currently selected finding.</p>
+      </div>
+
+      <div id="workflowContent">
+        <div class="notice notice-info">ℹ️ &nbsp;Select a finding from the Dashboard to see its workflow.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAGE: AUDIT LOG
+    ══════════════════════════════════════ -->
+    <div class="page" id="page-audit">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div>
+          <h1>Audit Log</h1>
+          <p class="page-subtitle">Full history of all agent and reviewer actions.</p>
+        </div>
+        <button class="btn btn-red" onclick="clearAuditLog()">Clear Log</button>
+      </div>
+
+      <div class="card">
+        <div id="auditList">
+          <p style="color:var(--muted);text-align:center;padding:24px">No actions recorded yet.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════ -->
+<script>
+// ── Sample data ───────────────────────────────────────────────────────────────
+const SAMPLE_FINDINGS = [
+  {
+    id: "F001",
+    rule: "sql-injection",
+    message: "User input concatenated directly into SQL query. An attacker can manipulate the query by injecting SQL syntax.",
+    severity: "critical",
+    file: "src/db/users.py",
+    line: 42,
+    category: "injection",
+    cwe: "CWE-89",
+    vulnerable: `def get_user(username):\n    query = "SELECT * FROM users WHERE name = '" + username + "'"\n    return db.execute(query)`,
+    fixed: `def get_user(username):\n    query = "SELECT * FROM users WHERE name = ?"\n    return db.execute(query, (username,))`,
+    explanation: "Direct string concatenation of user input into SQL queries allows an attacker to alter the query's logic. Use parameterised queries (prepared statements) to separate code from data.",
+    testSuite: ["test_get_user_valid", "test_get_user_injection_blocked", "test_sql_parametrized"],
+    status: "new",
+  },
+  {
+    id: "F002",
+    rule: "reflected-xss",
+    message: "Unescaped user input rendered into HTML response. Enables reflected Cross-Site Scripting.",
+    severity: "high",
+    file: "src/views/search.js",
+    line: 87,
+    category: "xss",
+    cwe: "CWE-79",
+    vulnerable: `app.get('/search', (req, res) => {\n  const q = req.query.q;\n  res.send('<h1>Results for: ' + q + '</h1>');\n});`,
+    fixed: `const he = require('he');\napp.get('/search', (req, res) => {\n  const q = he.encode(req.query.q);\n  res.send('<h1>Results for: ' + q + '</h1>');\n});`,
+    explanation: "Reflected XSS occurs when unvalidated input is echoed back to the browser in HTML context. Encode all user-controlled values before inserting them into HTML using a trusted escaping library.",
+    testSuite: ["test_search_safe_input", "test_search_xss_blocked", "test_search_html_encoded"],
+    status: "new",
+  },
+  {
+    id: "F003",
+    rule: "insecure-deserialization",
+    message: "Deserializing untrusted data with pickle can lead to arbitrary code execution.",
+    severity: "critical",
+    file: "src/cache/session.py",
+    line: 19,
+    category: "deserialization",
+    cwe: "CWE-502",
+    vulnerable: `import pickle\n\ndef load_session(data):\n    return pickle.loads(data)`,
+    fixed: `import json\n\ndef load_session(data):\n    return json.loads(data)`,
+    explanation: "Python's pickle module can execute arbitrary code during deserialization of malicious payloads. Replace pickle with a safe data-interchange format like JSON for session data that originates from untrusted sources.",
+    testSuite: ["test_session_load_valid", "test_session_malicious_payload", "test_json_roundtrip"],
+    status: "new",
+  },
+  {
+    id: "F004",
+    rule: "hardcoded-secret",
+    message: "AWS secret access key found hardcoded in source file. Credentials committed to version control are easily harvested.",
+    severity: "high",
+    file: "config/aws.js",
+    line: 5,
+    category: "secrets",
+    cwe: "CWE-798",
+    vulnerable: `const AWS = require('aws-sdk');\n\nAWS.config.update({\n  accessKeyId: 'AKIAIOSFODNN7EXAMPLE',\n  secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'\n});`,
+    fixed: `const AWS = require('aws-sdk');\n\nAWS.config.update({\n  accessKeyId: process.env.AWS_ACCESS_KEY_ID,\n  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY\n});`,
+    explanation: "Hardcoded credentials can be extracted from source control history even after deletion. Use environment variables or a secrets-management service (AWS Secrets Manager, Vault) to supply credentials at runtime.",
+    testSuite: ["test_env_vars_present", "test_no_literal_keys", "test_aws_connection"],
+    status: "new",
+  },
+  {
+    id: "F005",
+    rule: "path-traversal",
+    message: "Unsanitised filename used in file-read operation allowing directory traversal.",
+    severity: "medium",
+    file: "src/api/files.go",
+    line: 33,
+    category: "path-traversal",
+    cwe: "CWE-22",
+    vulnerable: `func readFile(w http.ResponseWriter, r *http.Request) {\n    name := r.URL.Query().Get("name")\n    data, _ := ioutil.ReadFile("./uploads/" + name)\n    w.Write(data)\n}`,
+    fixed: `func readFile(w http.ResponseWriter, r *http.Request) {\n    name := filepath.Base(r.URL.Query().Get("name"))\n    safe := filepath.Join("./uploads", name)\n    data, _ := ioutil.ReadFile(safe)\n    w.Write(data)\n}`,
+    explanation: "Concatenating user-supplied filenames allows traversal sequences like '../../etc/passwd'. Use filepath.Base to strip directory components, then filepath.Join to build a canonical path confined to the intended directory.",
+    testSuite: ["test_read_valid_file", "test_traversal_blocked", "test_path_canonicalized"],
+    status: "new",
+  },
+  {
+    id: "F006",
+    rule: "weak-cipher",
+    message: "MD5 used for password hashing. MD5 is cryptographically broken and unsuitable for storing passwords.",
+    severity: "medium",
+    file: "src/auth/hash.java",
+    line: 11,
+    category: "cryptography",
+    cwe: "CWE-327",
+    vulnerable: `import java.security.MessageDigest;\n\npublic String hashPassword(String pwd) {\n    MessageDigest md = MessageDigest.getInstance("MD5");\n    return toHex(md.digest(pwd.getBytes()));\n}`,
+    fixed: `import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;\n\nprivate final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);\n\npublic String hashPassword(String pwd) {\n    return encoder.encode(pwd);\n}`,
+    explanation: "MD5 produces fast, collision-prone hashes that can be reversed via rainbow tables. Use a purpose-built password hashing algorithm such as bcrypt, scrypt, or Argon2 with an appropriate work factor.",
+    testSuite: ["test_hash_stored_not_plain", "test_bcrypt_verify", "test_md5_not_used"],
+    status: "new",
+  }
+];
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let state = {
+  findings: [],
+  selectedId: null,
+  auditLog: [],
+  patchText: {},
+  approvalStatus: {},
+};
+
+function saveState() {
+  try { localStorage.setItem('sastaAgent', JSON.stringify(state)); } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('sastaAgent');
+    if (raw) { state = JSON.parse(raw); }
+  } catch(e) {}
+}
+
+function addAudit(action, detail, icon = '🔹') {
+  state.auditLog.unshift({ ts: new Date().toISOString(), action, detail, icon });
+  saveState();
+  renderAudit();
+  document.getElementById('nb-audit').textContent = state.auditLog.length;
+}
+
+// ── Navigation ──────────────────────────────────────────────────────────────────
+const PAGES = ['upload','dashboard','detail','fix','tests','pr','approval','workflow','audit'];
+
+function navigate(page) {
+  PAGES.forEach(p => {
+    document.getElementById('page-' + p).classList.toggle('active', p === page);
+    document.querySelectorAll(`[data-page="${p}"]`).forEach(el => el.classList.toggle('active', p === page));
+  });
+  // Render destination
+  if (page === 'dashboard')  renderDashboard();
+  if (page === 'detail')     renderDetail();
+  if (page === 'fix')        renderFix();
+  if (page === 'tests')      renderTests();
+  if (page === 'pr')         renderPR();
+  if (page === 'approval')   renderApproval();
+  if (page === 'workflow')   renderWorkflow();
+  if (page === 'audit')      renderAudit();
+}
+
+// ── Upload ─────────────────────────────────────────────────────────────────────
+function loadSampleData() {
+  state.findings = SAMPLE_FINDINGS.map(f => ({ ...f }));
+  state.selectedId = state.findings[0].id;
+  saveState();
+  addAudit('Sample data loaded', `${state.findings.length} findings imported`, '📂');
+  showUploadSuccess(state.findings.length, '(built-in sample)');
+  updateHeaderCount();
+  navigate('dashboard');
+}
+
+function showUploadSuccess(count, source) {
+  const el = document.getElementById('uploadStatus');
+  el.style.display = 'block';
+  document.getElementById('uploadNotice').innerHTML = `✅ &nbsp;<strong>${count} findings loaded</strong> from ${source}`;
+  document.getElementById('uploadPreview').innerHTML = `
+    <p style="color:var(--muted);font-size:13px;margin-top:8px;">Navigate to the <strong style="color:var(--text)">Dashboard</strong> to review findings, or continue below.</p>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn btn-primary" onclick="navigate('dashboard')">View Dashboard →</button>
+    </div>`;
+}
+
+function updateHeaderCount() {
+  document.getElementById('hdr-count').textContent = `${state.findings.length} finding${state.findings.length !== 1 ? 's' : ''}`;
+  document.getElementById('nb-dashboard').textContent = state.findings.length;
+}
+
+// File input handler
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      const raw = data.results || data.findings || (Array.isArray(data) ? data : []);
+      state.findings = raw.map((r, i) => ({
+        id: 'F' + String(i+1).padStart(3,'0'),
+        rule: r.check_id || r.rule || 'unknown-rule',
+        message: r.extra?.message || r.message || 'No description.',
+        severity: (r.extra?.severity || r.severity || 'medium').toLowerCase(),
+        file: r.path || r.file || 'unknown',
+        line: r.start?.line || r.line || 0,
+        category: r.extra?.metadata?.category || 'security',
+        cwe: r.extra?.metadata?.cwe || '',
+        vulnerable: r.extra?.lines || '',
+        fixed: '',
+        explanation: r.extra?.message || '',
+        testSuite: [],
+        status: 'new',
+      }));
+      if (state.findings.length === 0) throw new Error('No findings found');
+      state.selectedId = state.findings[0].id;
+      saveState();
+      addAudit('File uploaded', `${file.name} — ${state.findings.length} findings`, '📂');
+      showUploadSuccess(state.findings.length, `<em>${file.name}</em>`);
+      updateHeaderCount();
+    } catch(err) {
+      document.getElementById('uploadStatus').style.display = 'block';
+      document.getElementById('uploadNotice').innerHTML = `❌ &nbsp;<strong>Parse error:</strong> ${err.message}. Make sure the file is valid Semgrep JSON.`;
+      document.getElementById('uploadNotice').parentElement.querySelector('.notice').className = 'notice notice-danger';
+    }
+  };
+  reader.readAsText(file);
+});
+
+// Drag-drop
+const dz = document.getElementById('dropZone');
+['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('drag-over'); }));
+['dragleave','drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('drag-over'); }));
+dz.addEventListener('drop', ev => {
+  const file = ev.dataTransfer.files[0];
+  if (file) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('fileInput').files = dt.files;
+    document.getElementById('fileInput').dispatchEvent(new Event('change'));
+  }
+});
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function sevClass(s) {
+  return { critical:'badge-critical', high:'badge-high', medium:'badge-medium', low:'badge-low', info:'badge-info' }[s] || 'badge-info';
+}
+
+function statusClass(s) {
+  return { new:'badge-new', proposed:'badge-proposed', passed:'badge-passed', failed:'badge-failed', review:'badge-review', created:'badge-created', rejected:'badge-rejected' }[s] || 'badge-new';
+}
+
+function statusLabel(s) {
+  return { new:'New', proposed:'Fix Proposed', passed:'Tests Passed', failed:'Tests Failed', review:'Awaiting Review', created:'PR Created', rejected:'Rejected' }[s] || s;
+}
+
+function getFiltered() {
+  const sev  = document.getElementById('filterSev')?.value   || '';
+  const stat = document.getElementById('filterStatus')?.value || '';
+  const q    = (document.getElementById('filterSearch')?.value || '').toLowerCase();
+  return state.findings.filter(f => {
+    if (sev  && f.severity !== sev)   return false;
+    if (stat && f.status   !== stat)  return false;
+    if (q && !f.rule.toLowerCase().includes(q) && !f.file.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function resetFilters() {
+  document.getElementById('filterSev').value    = '';
+  document.getElementById('filterStatus').value = '';
+  document.getElementById('filterSearch').value = '';
+  renderDashboard();
+}
+
+function renderDashboard() {
+  if (!state.findings.length) {
+    document.getElementById('summaryGrid').innerHTML = '<p style="color:var(--muted);grid-column:1/-1">No findings loaded. Go to Upload.</p>';
+    document.getElementById('findingsBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:28px">No data.</td></tr>';
+    return;
+  }
+
+  // Summary cards
+  const counts = { total: state.findings.length, critical:0, high:0, medium:0, low:0, fixed:0 };
+  state.findings.forEach(f => {
+    if (f.severity === 'critical') counts.critical++;
+    if (f.severity === 'high')     counts.high++;
+    if (f.severity === 'medium')   counts.medium++;
+    if (f.severity === 'low')      counts.low++;
+    if (f.status === 'created')    counts.fixed++;
+  });
+
+  document.getElementById('summaryGrid').innerHTML = [
+    { num: counts.total,    label: 'Total',    color: 'var(--accent)' },
+    { num: counts.critical, label: 'Critical', color: 'var(--red)' },
+    { num: counts.high,     label: 'High',     color: 'var(--orange)' },
+    { num: counts.medium,   label: 'Medium',   color: 'var(--yellow)' },
+    { num: counts.low,      label: 'Low',      color: 'var(--green)' },
+    { num: counts.fixed,    label: 'PR Created', color: 'var(--green)' },
+  ].map(c => `
+    <div class="summary-card">
+      <div class="summary-num" style="color:${c.color}">${c.num}</div>
+      <div class="summary-label">${c.label}</div>
+    </div>`).join('');
+
+  // Table
+  const rows = getFiltered();
+  document.getElementById('findingsBody').innerHTML = rows.length
+    ? rows.map(f => `
+      <tr class="clickable-row" onclick="selectFinding('${f.id}');navigate('detail')">
+        <td style="color:var(--muted);font-size:11px;font-family:monospace">${f.id}</td>
+        <td><strong>${f.rule}</strong><br><span style="font-size:11px;color:var(--muted)">${f.cwe || f.category}</span></td>
+        <td><span class="badge ${sevClass(f.severity)}">${f.severity}</span></td>
+        <td style="font-family:monospace;font-size:11px">${f.file}</td>
+        <td style="font-family:monospace;font-size:12px">${f.line}</td>
+        <td><span class="badge ${statusClass(f.status)}">${statusLabel(f.status)}</span></td>
+        <td>
+          <button class="btn" style="font-size:11px;padding:4px 10px"
+            onclick="event.stopPropagation();selectFinding('${f.id}');navigate('detail')">
+            View →
+          </button>
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:28px">No findings match the current filters.</td></tr>';
+}
+
+// Filter listeners
+['filterSev','filterStatus','filterSearch'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', renderDashboard);
+});
+
+// ── Finding Detail ─────────────────────────────────────────────────────────────
+function selectFinding(id) {
+  state.selectedId = id;
+  saveState();
+}
+
+function currentFinding() {
+  return state.findings.find(f => f.id === state.selectedId);
+}
+
+function renderDetail() {
+  const f = currentFinding();
+  const el = document.getElementById('detailContent');
+  if (!f) {
+    el.innerHTML = '<div class="notice notice-info">ℹ️ &nbsp;No finding selected. Go to the <a href="#" onclick="navigate(\'dashboard\');return false;" style="color:var(--accent);">Dashboard</a>.</div>';
+    document.getElementById('detailTitle').textContent = 'Finding Detail';
+    document.getElementById('detailSubtitle').textContent = 'Select a finding from the dashboard.';
+    return;
+  }
+
+  document.getElementById('detailTitle').textContent = f.rule;
+  document.getElementById('detailSubtitle').textContent = `${f.file} · line ${f.line}`;
+
+  el.innerHTML = `
+    <div class="detail-meta">
+      <span class="badge ${sevClass(f.severity)}">${f.severity}</span>
+      <div class="meta-item"><span>ID</span>${f.id}</div>
+      <div class="meta-item"><span>CWE</span>${f.cwe || '—'}</div>
+      <div class="meta-item"><span>Category</span>${f.category}</div>
+      <div class="meta-item"><span>Status</span>${statusLabel(f.status)}</div>
+    </div>
+
+    <div class="card card-sm">
+      <h3>📌 Issue Description</h3>
+      <p style="color:var(--muted);line-height:1.7">${f.message}</p>
+    </div>
+
+    <div class="card card-sm">
+      <h3>⚠️ Vulnerable Code  <span style="font-weight:400;color:var(--muted);font-size:12px">${f.file}:${f.line}</span></h3>
+      <pre><code>${escHtml(f.vulnerable)}</code></pre>
+    </div>
+
+    <div class="card card-sm">
+      <h3>💡 Explanation</h3>
+      <p style="color:var(--muted);line-height:1.7">${f.explanation}</p>
+    </div>
+
+    ${f.fixed ? `
+    <div class="card card-sm">
+      <h3>🔀 Side-by-Side Diff</h3>
+      <div class="diff-grid">
+        <div>
+          <div class="diff-label before">● Before (Vulnerable)</div>
+          <pre>${buildDiffHtml(f.vulnerable, 'del')}</pre>
+        </div>
+        <div>
+          <div class="diff-label after">● After (Fixed)</div>
+          <pre>${buildDiffHtml(f.fixed, 'add')}</pre>
+        </div>
+      </div>
+    </div>` : ''}
+  `;
+}
+
+function escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function buildDiffHtml(code, type) {
+  return escHtml(code).split('\n').map(line => {
+    const cls = type === 'del' ? 'diff-del' : 'diff-add';
+    const prefix = type === 'del' ? '- ' : '+ ';
+    return `<span class="diff-line ${cls}">${prefix}${line}</span>`;
+  }).join('\n');
+}
+
+// ── Fix Generator ──────────────────────────────────────────────────────────────
+const CONFIDENCE = { critical: 92, high: 87, medium: 78, low: 95, info: 70 };
+
+function renderFix() {
+  const f = currentFinding();
+  const el = document.getElementById('fixContent');
+  if (!f) {
+    el.innerHTML = '<div class="notice notice-info">ℹ️ &nbsp;No finding selected.</div>';
+    return;
+  }
+
+  const conf    = CONFIDENCE[f.severity] || 80;
+  const hasFix  = ['proposed','passed','failed','review','created'].includes(f.status);
+  const patch   = state.patchText[f.id] || f.fixed || '';
+  const confColor = conf >= 85 ? 'var(--green)' : conf >= 70 ? 'var(--yellow)' : 'var(--orange)';
+
+  el.innerHTML = `
+    <div class="card card-sm">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div>
+          <h3>🔧 ${f.rule}</h3>
+          <p style="color:var(--muted);font-size:12px">${f.file}:${f.line} · <span class="badge ${sevClass(f.severity)}">${f.severity}</span></p>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:12px;color:var(--muted)">Confidence</div>
+          <div style="font-size:22px;font-weight:700;color:${confColor}">${conf}%</div>
+          <div class="confidence-bar" style="width:120px">
+            <div class="confidence-fill" id="confFill" style="width:${conf}%;background:${confColor}"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${!hasFix ? `
+    <div class="notice notice-info">ℹ️ Click <strong>Generate Fix</strong> to produce a suggested patch for this finding.</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="generateFix('${f.id}')">⚡ Generate Fix</button>
+    </div>` : `
+    <div class="card card-sm">
+      <div class="patch-toolbar">
+        <h3>📄 Suggested Patch</h3>
+        <div class="btn-row" style="margin:0">
+          <button class="btn" style="font-size:11px" onclick="regenerateFix('${f.id}')">🔄 Regenerate</button>
+          <button class="btn btn-primary" style="font-size:11px" onclick="navigate('tests')">Run Tests →</button>
+        </div>
+      </div>
+      <div class="patch-wrap">
+        <textarea id="patchEditor" rows="10" onchange="savePatch('${f.id}',this.value)">${escHtml(patch)}</textarea>
+      </div>
+    </div>
+
+    <div class="card card-sm">
+      <h3>🔀 Diff Preview</h3>
+      <div class="diff-grid">
+        <div>
+          <div class="diff-label before">● Before</div>
+          <pre>${buildDiffHtml(f.vulnerable, 'del')}</pre>
+        </div>
+        <div>
+          <div class="diff-label after">● After</div>
+          <pre>${buildDiffHtml(patch, 'add')}</pre>
+        </div>
+      </div>
+    </div>`}
+  `;
+}
+
+function generateFix(id) {
+  const f = state.findings.find(x => x.id === id);
+  if (!f) return;
+  const btn = event.target;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating…';
+
+  setTimeout(() => {
+    f.status = 'proposed';
+    state.patchText[id] = f.fixed || '// Auto-generated fix placeholder\n';
+    saveState();
+    addAudit('Fix generated', `${f.rule} in ${f.file}:${f.line}`, '🔧');
+    renderFix();
+    renderWorkflow();
+  }, 1400);
+}
+
+function regenerateFix(id) {
+  const f = state.findings.find(x => x.id === id);
+  if (!f) return;
+  f.status = 'proposed';
+  state.patchText[id] = f.fixed || '';
+  saveState();
+  addAudit('Fix regenerated', `${f.rule}`, '🔄');
+  renderFix();
+}
+
+function savePatch(id, val) {
+  state.patchText[id] = val;
+  saveState();
+}
+
+// ── Test Runner ────────────────────────────────────────────────────────────────
+function renderTests() {
+  const f = currentFinding();
+  const el = document.getElementById('testContent');
+  if (!f || !['proposed','passed','failed','review','created'].includes(f.status)) {
+    el.innerHTML = '<div class="notice notice-info">ℹ️ &nbsp;Generate a fix first.</div>';
+    return;
+  }
+
+  const ran   = ['passed','failed','review','created'].includes(f.status);
+  const tests = f.testSuite.length ? f.testSuite : ['test_smoke','test_security','test_regression'];
+
+  el.innerHTML = `
+    <div class="card card-sm">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <h3>🧪 Test Suite — <code style="font-size:12px">${f.rule}</code></h3>
+        <button class="btn btn-primary" id="runTestsBtn" onclick="runTests('${f.id}')">
+          ▶ Run Tests
+        </button>
+      </div>
+    </div>
+
+    <div class="card card-sm">
+      <h3>Output</h3>
+      <div class="log-box" id="testLog">
+        ${ran ? buildTestLog(tests, f.status) : '<span class="log-muted">Click "Run Tests" to execute the test suite.</span>'}
+      </div>
+    </div>
+
+    ${ran ? `
+    <div class="card card-sm">
+      <div class="notice ${f.status === 'passed' || f.status === 'review' || f.status === 'created'  ? 'notice-success' : 'notice-danger'}">
+        ${f.status === 'failed' ? '❌ &nbsp;Tests failed. Review the patch and regenerate.' : '✅ &nbsp;All tests passed! Proceed to PR Preview.'}
+      </div>
+      ${f.status !== 'failed' ? '<div class="btn-row"><button class="btn btn-primary" onclick="navigate(\'pr\')">PR Preview →</button></div>' : ''}
+    </div>` : ''}
+  `;
+}
+
+function buildTestLog(tests, status) {
+  const allPass = status !== 'failed';
+  const failIdx = allPass ? -1 : Math.floor(Math.random() * tests.length);
+  let html = `<span class="log-info">▶ Starting test run at ${new Date().toLocaleTimeString()}…</span>\n`;
+  html += `<span class="log-muted">──────────────────────────────────────</span>\n`;
+  tests.forEach((t, i) => {
+    const pass = allPass || i !== failIdx;
+    html += `<span class="${pass ? 'log-pass' : 'log-fail'}">${pass ? '  ✓ PASS' : '  ✗ FAIL'}  ${t}</span>\n`;
+  });
+  html += `<span class="log-muted">──────────────────────────────────────</span>\n`;
+  const passed = allPass ? tests.length : tests.length - 1;
+  const failed = allPass ? 0 : 1;
+  html += `<span class="${allPass ? 'log-pass' : 'log-fail'}">${passed} passed, ${failed} failed</span>\n`;
+  html += `<span class="log-info">✔ Run complete (${(Math.random()*1.4+0.4).toFixed(2)}s)</span>`;
+  return html;
+}
+
+function runTests(id) {
+  const f = state.findings.find(x => x.id === id);
+  if (!f) return;
+  const btn = document.getElementById('runTestsBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Running…'; }
+
+  const delay = 1600 + Math.random() * 800;
+  setTimeout(() => {
+    // Deterministic: critical/high findings always pass (realistic scenario)
+    const outcome = ['critical','high'].includes(f.severity) ? 'passed' : (Math.random() > 0.25 ? 'passed' : 'failed');
+    f.status = outcome;
+    saveState();
+    addAudit(`Tests ${outcome}`, `${f.testSuite.length || 3} tests for ${f.rule}`, outcome === 'passed' ? '✅' : '❌');
+    renderTests();
+    renderWorkflow();
+  }, delay);
+}
+
+// ── PR Preview ─────────────────────────────────────────────────────────────────
+function renderPR() {
+  const f = currentFinding();
+  const el = document.getElementById('prContent');
+  if (!f || !['passed','review','created'].includes(f.status)) {
+    el.innerHTML = '<div class="notice notice-info">ℹ️ &nbsp;Tests must pass before generating a PR preview.</div>';
+    return;
+  }
+
+  if (f.status === 'passed') {
+    f.status = 'review';
+    saveState();
+    addAudit('PR preview generated', `${f.rule} — awaiting review`, '📝');
+    renderWorkflow();
+  }
+
+  const branch  = `fix/sast-${f.id.toLowerCase()}-${f.rule.replace(/[^a-z0-9]/g,'-')}`;
+  const commit  = `fix(security): remediate ${f.rule} in ${f.file.split('/').pop()}`;
+  const prDesc  = `## Security Fix — ${f.rule}\n\n**Finding ID:** ${f.id}  \n**Severity:** ${f.severity.toUpperCase()}  \n**CWE:** ${f.cwe || 'N/A'}  \n**File:** \`${f.file}\` (line ${f.line})\n\n### Summary\n${f.message}\n\n### Changes\n- Replaced vulnerable pattern with secure alternative\n- No functional behaviour changed\n- All ${f.testSuite.length || 3} security regression tests pass\n\n### Testing\n\`\`\`\n${(f.testSuite.join('\n') || 'test_smoke\ntest_security')}\n\`\`\`\n\n### References\n- ${f.cwe ? `[${f.cwe}](https://cwe.mitre.org/data/definitions/${f.cwe.replace('CWE-','')}.html)` : 'Internal security policy'}\n- OWASP Top 10: ${f.category}\n\n---\n*Generated by SAST Remediation Agent*`;
+
+  el.innerHTML = `
+    <div class="card card-sm">
+      <h3>🌿 Branch &amp; Commit</h3>
+      <div class="pr-field"><label>Branch Name</label><div class="pr-value" style="font-family:monospace">${branch}</div></div>
+      <div class="pr-field"><label>Commit Message</label><div class="pr-value">${commit}</div></div>
+    </div>
+    <div class="card card-sm">
+      <h3>📝 PR Description</h3>
+      <div class="pr-description">${escHtml(prDesc)}</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="navigate('approval')">Go to Approval Gate →</button>
+    </div>
+  `;
+}
+
+// ── Approval Gate ──────────────────────────────────────────────────────────────
+function renderApproval() {
+  const f = currentFinding();
+  const el = document.getElementById('approvalContent');
+  if (!f || !['review','created','rejected'].includes(f.status)) {
+    el.innerHTML = '<div class="notice notice-info">ℹ️ &nbsp;A PR preview must be generated first.</div>';
+    return;
+  }
+
+  const approved = f.status === 'review';  // awaiting
+  const created  = f.status === 'created';
+  const rejected = f.status === 'rejected';
+
+  el.innerHTML = `
+    <div class="card card-sm">
+      <h3>👁 Reviewer Decision</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">
+        Review the generated patch for finding <strong style="color:var(--text)">${f.id} — ${f.rule}</strong>.
+        Approve to enable PR creation, or reject to send back for rework.
+      </p>
+
+      ${created  ? '<div class="notice notice-success">✅ &nbsp;Patch approved and <strong>PR Created</strong>.</div>' : ''}
+      ${rejected ? '<div class="notice notice-danger">❌ &nbsp;Patch rejected. Return to Fix Generator to rework.</div>' : ''}
+      ${approved ? '<div class="notice notice-warn">⏳ &nbsp;Awaiting reviewer decision.</div>' : ''}
+
+      <div class="btn-row">
+        ${!created && !rejected ? `
+          <button class="btn btn-green" onclick="approveFix('${f.id}')">✅ Approve</button>
+          <button class="btn btn-red"   onclick="rejectFix('${f.id}')">❌ Reject</button>
+          <button class="btn btn-orange" onclick="navigate('fix')">✏️ Edit Patch</button>` : ''}
+        ${rejected ? `<button class="btn btn-orange" onclick="navigate('fix')">✏️ Rework Patch</button>` : ''}
+      </div>
+    </div>
+
+    <div class="card card-sm">
+      <h3>🚀 Create Pull Request</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
+        The "Create PR" button is enabled only after a reviewer approves the patch.
+      </p>
+      <button class="btn btn-primary" style="font-size:14px;padding:10px 24px"
+        id="createPrBtn"
+        onclick="createPR('${f.id}')"
+        ${created ? 'disabled' : (!created && f.status === 'created') ? '' : ''}>
+        ${created ? '✅ PR Created' : '🚀 Create PR'}
+      </button>
+      ${f.status !== 'created' ? '<span id="prGateMsg" style="display:inline-block;margin-left:12px;font-size:12px;color:var(--muted)">' + (approved ? 'Approve the patch first.' : '') + '</span>' : ''}
+    </div>
+  `;
+
+  // Enable/disable create button
+  const btn = document.getElementById('createPrBtn');
+  if (btn && !created) {
+    state.approvalStatus[f.id] === 'approved'
+      ? btn.removeAttribute('disabled')
+      : btn.setAttribute('disabled', true);
+    const msg = document.getElementById('prGateMsg');
+    if (msg) msg.textContent = state.approvalStatus[f.id] === 'approved' ? '' : 'Approve the patch first.';
+  }
+}
+
+function approveFix(id) {
+  const f = state.findings.find(x => x.id === id);
+  if (!f) return;
+  state.approvalStatus[id] = 'approved';
+  saveState();
+  addAudit('Patch approved', `${f.rule} approved by reviewer`, '✅');
+  renderApproval();
+}
+
+function rejectFix(id) {
+  const f = state.findings.find(x => x.id === id);
+  if (!f) return;
+  f.status = 'rejected';
+  state.approvalStatus[id] = 'rejected';
+  saveState();
+  addAudit('Patch rejected', `${f.rule} rejected — rework required`, '❌');
+  renderApproval();
+  renderWorkflow();
+}
+
+function createPR(id) {
+  const f = state.findings.find(x => x.id === id);
+  if (!f || state.approvalStatus[id] !== 'approved') return;
+  const btn = document.getElementById('createPrBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creating…'; }
+  setTimeout(() => {
+    f.status = 'created';
+    saveState();
+    addAudit('PR created', `fix/sast-${id.toLowerCase()}-${f.rule.replace(/[^a-z0-9]/g,'-')}`, '🚀');
+    renderApproval();
+    renderWorkflow();
+    renderDashboard();
+  }, 1200);
+}
+
+// ── Workflow ───────────────────────────────────────────────────────────────────
+const STEPS = [
+  { key: 'new',      label: 'New' },
+  { key: 'proposed', label: 'Fix\nProposed' },
+  { key: 'passed',   label: 'Tests\nPassed' },
+  { key: 'review',   label: 'Awaiting\nReview' },
+  { key: 'created',  label: 'PR\nCreated' },
+];
+
+function workflowIndex(status) {
+  const map = { new:0, proposed:1, passed:2, failed:2, review:3, created:4, rejected:3 };
+  return map[status] ?? 0;
+}
+
+function renderWorkflow() {
+  const el = document.getElementById('workflowContent');
+  const f  = currentFinding();
+  if (!f) {
+    el.innerHTML = '<div class="notice notice-info">ℹ️ &nbsp;Select a finding from the Dashboard.</div>';
+    return;
+  }
+
+  const idx     = workflowIndex(f.status);
+  const failed  = f.status === 'failed';
+  const rejected = f.status === 'rejected';
+
+  let stepsHtml = '';
+  STEPS.forEach((step, i) => {
+    const isDone   = i < idx;
+    const isActive = i === idx && !failed && !rejected;
+    const isFailed = i === idx && (failed || rejected);
+    const dotClass = isDone ? 'done' : isActive ? 'active' : isFailed ? 'failed' : '';
+    const lblClass = isDone ? 'done' : isActive ? 'active' : isFailed ? 'failed' : '';
+
+    stepsHtml += `
+      <div class="workflow-step">
+        <div class="step-dot ${dotClass}">${isDone ? '✓' : isFailed ? '✗' : i+1}</div>
+        <div class="step-label ${lblClass}">${step.label.replace('\n','<br>')}</div>
+      </div>`;
+
+    if (i < STEPS.length - 1) {
+      const connClass = isDone ? 'done' : (isActive && !failed && !rejected) ? 'active' : '';
+      stepsHtml += `<div class="step-connector ${connClass}"></div>`;
+    }
+  });
+
+  el.innerHTML = `
+    <div class="card card-sm">
+      <h3>${f.rule} — <span style="font-weight:400;color:var(--muted)">${f.file}:${f.line}</span></h3>
+      <div style="margin-bottom:12px">
+        <span class="badge ${sevClass(f.severity)}">${f.severity}</span>
+        &nbsp;
+        <span class="badge ${statusClass(f.status)}">${statusLabel(f.status)}</span>
+      </div>
+      <div class="workflow-steps">${stepsHtml}</div>
+      ${failed ? '<div class="notice notice-danger" style="margin-top:8px">❌ &nbsp;Tests failed. Go to <a href="#" onclick="navigate(\'fix\');return false;" style="color:var(--accent)">Fix Generator</a> and rework the patch.</div>' : ''}
+      ${rejected ? '<div class="notice notice-danger" style="margin-top:8px">❌ &nbsp;Patch rejected. Go to <a href="#" onclick="navigate(\'fix\');return false;" style="color:var(--accent)">Fix Generator</a> and rework.</div>' : ''}
+    </div>
+
+    <div class="card card-sm">
+      <h3>All Findings Snapshot</h3>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>ID</th><th>Rule</th><th>Severity</th><th>Status</th>
+          </tr></thead>
+          <tbody>
+            ${state.findings.map(x => `
+              <tr class="clickable-row" onclick="selectFinding('${x.id}');renderWorkflow()">
+                <td style="font-family:monospace;font-size:11px">${x.id}</td>
+                <td>${x.rule}</td>
+                <td><span class="badge ${sevClass(x.severity)}">${x.severity}</span></td>
+                <td><span class="badge ${statusClass(x.status)}">${statusLabel(x.status)}</span></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ── Audit Log ──────────────────────────────────────────────────────────────────
+function renderAudit() {
+  const el = document.getElementById('auditList');
+  if (!state.auditLog.length) {
+    el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px">No actions recorded yet.</p>';
+    return;
+  }
+
+  el.innerHTML = state.auditLog.map(e => {
+    const d = new Date(e.ts);
+    const ts = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+    return `
+      <div class="audit-item">
+        <div class="audit-time">${ts}</div>
+        <div class="audit-icon">${e.icon}</div>
+        <div>
+          <div class="audit-text"><strong>${e.action}</strong></div>
+          <div class="audit-sub">${e.detail}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('nb-audit').textContent = state.auditLog.length;
+}
+
+function clearAuditLog() {
+  state.auditLog = [];
+  saveState();
+  renderAudit();
+}
+
+// ── Mobile Nav ─────────────────────────────────────────────────────────────────
+function buildMobileNav() {
+  const labels = {
+    upload:'Upload', dashboard:'Dashboard', detail:'Detail', fix:'Fix',
+    tests:'Tests', pr:'PR', approval:'Approval', workflow:'Workflow', audit:'Audit'
+  };
+  const mn = document.getElementById('mobileNav');
+  mn.innerHTML = PAGES.map(p => `
+    <div class="mobile-nav-item ${p==='upload'?'active':''}" data-page="${p}" onclick="navigate('${p}')">
+      ${labels[p]}
+    </div>`).join('');
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+function init() {
+  loadState();
+  buildMobileNav();
+  updateHeaderCount();
+
+  // Sidebar + mobile nav click
+  document.querySelectorAll('[data-page]').forEach(el => {
+    el.addEventListener('click', () => navigate(el.dataset.page));
+  });
+
+  // Restore state
+  if (state.findings.length) {
+    updateHeaderCount();
+    const el = document.getElementById('uploadStatus');
+    if (el) {
+      el.style.display = 'block';
+      document.getElementById('uploadNotice').innerHTML = `✅ &nbsp;<strong>${state.findings.length} findings</strong> in memory from previous session.`;
+      document.getElementById('uploadPreview').innerHTML = `
+        <div class="btn-row" style="margin-top:8px">
+          <button class="btn btn-primary" onclick="navigate('dashboard')">View Dashboard →</button>
+        </div>`;
+    }
+  }
+
+  renderAudit();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
